@@ -6,6 +6,8 @@
 //  Copyright (c) 2014 Kiad Software. All rights reserved.
 //
 
+import Foundation
+
 /// A convenience type declaration for use with top-level JSON objects.
 public typealias JSON = JSValue
 
@@ -76,6 +78,46 @@ public struct JSValue : Equatable {
         case Invalid(Error)
     }
 
+    public init(_ rawValue: AnyObject) {
+        switch rawValue {
+        case let value as NSNumber:
+            if String.fromCString(value.objCType) == "c" {
+                self.value = JSBackingValue.JSBool(value.boolValue)
+                return
+            }
+            self.value = JSBackingValue.JSNumber(value)
+        case let value as NSString:
+            self.value = JSBackingValue.JSString(value)
+        case let value as NSNull:
+            self.value = JSBackingValue.JSNull
+        case let value as NSArray:
+            var jsonValues = [JSValue]()
+            for possibleJsonValue : AnyObject in value {
+                let jsonValue = JSValue(possibleJsonValue)
+                if jsonValue.hasValue {
+                    jsonValues.append(jsonValue)
+                }
+            }
+            self.value = JSBackingValue.JSArray(jsonValues)
+        case let value as NSDictionary:
+            var jsonObject = Dictionary<String, JSValue>()
+            for (possibleJsonKey : AnyObject, possibleJsonValue : AnyObject) in value {
+                if let key = possibleJsonKey as? NSString {
+                    let jsonValue = JSValue(possibleJsonValue)
+                    if jsonValue.hasValue {
+                        jsonObject[key] = jsonValue
+                    }
+                }
+            }
+            self.value = JSBackingValue.JSObject(jsonObject)
+        default:
+            let error = Error(
+                code: JSValue.ErrorCode.IndexingIntoUnsupportedType.code,
+                domain: JSValueErrorDomain,
+                userInfo: [ErrorKeys.LocalizedDescription: JSValue.ErrorCode.ParsingError.message])
+            self.value = JSBackingValue.Invalid(error)
+        }
+    }
     
     /// Initializes a new `JSValue` with a `JSArrayType` value.
     public init(_ value: JSArrayType) {
